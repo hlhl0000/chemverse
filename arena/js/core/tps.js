@@ -16,6 +16,42 @@ const PITCH_MAX = THREE.MathUtils.degToRad(55);
 const CAM_LERP_K = 10;       // 카메라 위치 lerp 스무딩 계수(~10/s)
 const LOOK_SENS_TOUCH = 0.0045;
 const LOOK_SENS_MOUSE = 0.0028;
+const CAM_COLLIDE_MARGIN = 0.3; // 카메라 오클루전: 벽 표면에서 띄울 여유(m)
+const CAM_MIN_DIST = 0.6;       // 카메라가 피벗에 붙을 수 있는 최소 거리(m)
+
+// 선분(원점 o, 단위방향 d, 길이 L) vs 마진 m 확장 AABB 슬랩 교차 — 첫 진입 t 반환(미교차/내부 시작은 -1)
+// 카메라 오클루전용 (Fable 검수 추가). THREE.Raycaster 없이 순수 산술 — 프레임당 할당 0.
+function raySlabAABB(ox, oy, oz, dx, dy, dz, box, m, L) {
+  let tNear = 0, tFar = L;
+  if (Math.abs(dx) < 1e-9) {
+    if (ox < box.min.x - m || ox > box.max.x + m) return -1;
+  } else {
+    let t1 = (box.min.x - m - ox) / dx, t2 = (box.max.x + m - ox) / dx;
+    if (t1 > t2) { const s = t1; t1 = t2; t2 = s; }
+    if (t1 > tNear) tNear = t1;
+    if (t2 < tFar) tFar = t2;
+    if (tNear > tFar) return -1;
+  }
+  if (Math.abs(dy) < 1e-9) {
+    if (oy < box.min.y - m || oy > box.max.y + m) return -1;
+  } else {
+    let t1 = (box.min.y - m - oy) / dy, t2 = (box.max.y + m - oy) / dy;
+    if (t1 > t2) { const s = t1; t1 = t2; t2 = s; }
+    if (t1 > tNear) tNear = t1;
+    if (t2 < tFar) tFar = t2;
+    if (tNear > tFar) return -1;
+  }
+  if (Math.abs(dz) < 1e-9) {
+    if (oz < box.min.z - m || oz > box.max.z + m) return -1;
+  } else {
+    let t1 = (box.min.z - m - oz) / dz, t2 = (box.max.z + m - oz) / dz;
+    if (t1 > t2) { const s = t1; t1 = t2; t2 = s; }
+    if (t1 > tNear) tNear = t1;
+    if (t2 < tFar) tFar = t2;
+    if (tNear > tFar) return -1;
+  }
+  return tNear > 0 ? tNear : -1;
+}
 
 export class TPSControls {
   constructor(engine, { joystickZone, lookZone, canvas } = {}) {
@@ -192,22 +228,45 @@ export class TPSControls {
     this._idealPos.copy(this._pivot).add(this._camOffset);
   }
 
+  // 카메라 오클루전(Fable 검수 추가): pivot→target 선분이 콜라이더와 교차하면
+  // target을 첫 교차 지점 앞(CAM_COLLIDE_MARGIN)으로 당긴다. 벽에 가까울수록
+  // 붐이 즉시 짧아지므로(클램프는 스냅) 벽 너머로 시야가 가려지지 않는다.
+  _occludeToward(target) {
+    const o = this._pivot;
+    let dx = target.x - o.x, dy = target.y - o.y, dz = target.z - o.z;
+    const L = Math.sqrt(dx * dx + dy * dy + dz * dz);
+    if (L < 1e-6) return;
+    dx /= L; dy /= L; dz /= L;
+    let tHit = L;
+    for (const box of this.colliders) {
+      const t = raySlabAABB(o.x, o.y, o.z, dx, dy, dz, box, CAM_COLLIDE_MARGIN, L);
+      if (t >= 0 && t < tHit) tHit = t;
+    }
+    if (tHit < L) {
+      const d = Math.max(CAM_MIN_DIST, tHit - 0.05);
+      target.set(o.x + dx * d, Math.max(0.25, o.y + dy * d), o.z + dz * d);
+    }
+  }
+
   _updateCamera(dt) {
-    this._computeIdealCameraPos();
-    const t = 1 - Math.exp(-CAM_LERP_K * dt);
-    this._camPos.lerp(this._idealPos, t);
-    this.engine.camera.position.copy(this._camPos);
     this._pivot.copy(this.object.position);
     this._pivot.y += EYE_HEIGHT;
+    this._computeIdealCameraPos();
+    this._occludeToward(this._idealPos);          // 목표 지점을 가림 없는 곳으로
+    const t = 1 - Math.exp(-CAM_LERP_K * dt);
+    this._camPos.lerp(this._idealPos, t);
+    this._occludeToward(this._camPos);            // 보간 중간 위치도 벽 통과 금지
+    this.engine.camera.position.copy(this._camPos);
     this.engine.camera.lookAt(this._pivot);
   }
 
   _syncCameraInstant() {
-    this._computeIdealCameraPos();
-    this._camPos.copy(this._idealPos);
-    this.engine.camera.position.copy(this._camPos);
     this._pivot.copy(this.object.position);
     this._pivot.y += EYE_HEIGHT;
+    this._computeIdealCameraPos();
+    this._occludeToward(this._idealPos);
+    this._camPos.copy(this._idealPos);
+    this.engine.camera.position.copy(this._camPos);
     this.engine.camera.lookAt(this._pivot);
   }
 
