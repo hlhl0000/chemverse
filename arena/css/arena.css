@@ -1,0 +1,185 @@
+/* ═══════════════════════════════════════════════════════════
+   ChemVerse ARENA — 픽셀 게임 디자인 시스템 (소유: Fable)
+   디자인매뉴얼 v2.0 팔레트 계승 + 복셀 게임 감성(DungGeunMo)
+   팀: 산화 OX #ff8a3d / 환원 RE #00b4d8  (colorblind-safe 쌍)
+   ═══════════════════════════════════════════════════════════ */
+
+@font-face {
+  font-family: 'DGM';
+  src: url('https://cdn.jsdelivr.net/gh/projectnoonnu/noonfonts_2001@1.1/DungGeunMo.woff') format('woff');
+  font-weight: normal; font-style: normal; font-display: swap;
+}
+
+:root {
+  --bg: #0e1117; --s1: #13161f; --s2: #1a1f2b; --line: #2a3040;
+  --tx: #e8ecf4; --tx2: #8b93a7;
+  --cy: #00b4d8; --ox: #ff8a3d; --re: #00b4d8;
+  --ok: #35d07f; --warn: #ffd166; --bad: #ef476f;
+  --px: 3px;                 /* 픽셀 보더 두께 */
+  --f: 'DGM', 'Courier New', monospace;
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+html, body { height: 100%; overflow: hidden; }
+body {
+  background: var(--bg); color: var(--tx); font-family: var(--f);
+  touch-action: none; user-select: none; -webkit-user-select: none;
+}
+.hidden { display: none !important; }
+
+#gl { position: fixed; inset: 0; width: 100%; height: 100%; display: block; }
+
+/* ── 픽셀 프레임 공통: 부드러운 라운드 금지, 계단형 그림자 ── */
+.lobby-card, .pxbtn, .mcard, input, select, .toast, .badge {
+  border-radius: 0;
+  image-rendering: pixelated;
+}
+
+/* ═══════════ 로비 ═══════════ */
+#lobby { position: fixed; inset: 0; z-index: 30; overflow-y: auto; background:
+  linear-gradient(180deg, #0e1117 0%, #11162200 40%),
+  repeating-linear-gradient(0deg, #0e1117 0 22px, #10141d 22px 24px),
+  repeating-linear-gradient(90deg, #0e1117 0 22px, #10141d 22px 24px);
+}
+.scr { min-height: 100%; display: flex; align-items: center; justify-content: center; padding: 24px 14px; }
+
+.lobby-card {
+  width: min(480px, 94vw); background: var(--s1); padding: 26px 22px;
+  border: var(--px) solid var(--line);
+  box-shadow: 0 var(--px) 0 #000, var(--px) 0 0 #000, calc(-1*var(--px)) 0 0 #000, 0 calc(-1*var(--px)) 0 #000,
+              8px 10px 0 rgba(0,0,0,.45);
+}
+.lobby-card.wide { width: min(560px, 96vw); }
+
+.brand { text-align: center; margin-bottom: 20px; }
+.brand-mark { font-size: 34px; display: block; color: var(--cy); text-shadow: 3px 3px 0 #063a4a; }
+.brand h1 { font-size: 27px; letter-spacing: 1px; margin-top: 6px; }
+.brand h1 em { font-style: normal; color: var(--ox); text-shadow: 3px 3px 0 #4a2506; }
+.kicker { color: var(--tx2); font-size: 13px; margin-top: 6px; }
+
+label, .lbl-block { display: block; font-size: 13px; color: var(--tx2); margin: 12px 0 5px; }
+input, select {
+  width: 100%; background: var(--s2); color: var(--tx); font-family: var(--f); font-size: 16px;
+  border: var(--px) solid var(--line); padding: 9px 10px; outline: none; appearance: none;
+}
+input:focus, select:focus { border-color: var(--cy); }
+.hint { font-size: 11px; color: var(--tx2); }
+
+.form-row3 { display: grid; grid-template-columns: 1fr 1fr 2fr; gap: 10px; }
+.form-row2 { display: grid; grid-template-columns: 1fr 1.6fr; gap: 10px; align-items: end; }
+.join-btns { display: flex; flex-direction: column; gap: 8px; }
+
+/* ── 미션 카드 ── */
+#mission-cards { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.mcard {
+  background: var(--s2); border: var(--px) solid var(--line); padding: 12px 11px; cursor: pointer;
+  transition: transform .06s;
+}
+.mcard .m-name { font-size: 15px; color: var(--tx); }
+.mcard .m-tag  { font-size: 11px; color: var(--tx2); margin-top: 5px; line-height: 1.5; }
+.mcard.on { border-color: var(--cy); background: #0d2733; box-shadow: 4px 4px 0 rgba(0,180,216,.25); }
+.mcard.on .m-name { color: var(--cy); }
+.mcard.locked { opacity: .45; cursor: not-allowed; }
+.mcard.locked::after { content: '준비 중'; display: inline-block; font-size: 10px; color: var(--warn); margin-top: 6px; }
+.mcard:active:not(.locked) { transform: translate(2px, 2px); }
+
+/* ── 픽셀 버튼 ── */
+.pxbtn {
+  font-family: var(--f); font-size: 15px; cursor: pointer; padding: 11px 14px; width: 100%;
+  color: var(--tx); background: var(--s2); border: var(--px) solid var(--line);
+  box-shadow: 0 4px 0 #000; transition: transform .05s, box-shadow .05s;
+}
+.pxbtn:active { transform: translateY(3px); box-shadow: 0 1px 0 #000; }
+.pxbtn.primary { background: var(--cy); border-color: #077f9b; color: #04222b; font-weight: bold; }
+.pxbtn.ghost { background: transparent; color: var(--tx2); }
+.pxbtn.ox { background: #3a2313; border-color: var(--ox); color: var(--ox); }
+.pxbtn.re { background: #0d2733; border-color: var(--re); color: var(--re); }
+.pxbtn.big { font-size: 18px; padding: 14px; margin-top: 16px; }
+.pxbtn:disabled { opacity: .4; cursor: not-allowed; }
+#btn-leave { margin-top: 10px; }
+
+.login-msg { min-height: 18px; font-size: 12px; color: var(--warn); margin-top: 10px; text-align: center; }
+
+/* ── 대기실 ── */
+#scr-wait h2 { text-align: center; font-size: 22px; }
+.team-cols { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 16px; }
+.roster { margin-top: 8px; display: flex; flex-direction: column; gap: 6px; min-height: 120px; }
+.roster-item {
+  font-size: 13px; padding: 7px 9px; background: var(--s2); border-left: 4px solid var(--line);
+  display: flex; justify-content: space-between; align-items: center;
+}
+.team-col.ox .roster-item { border-left-color: var(--ox); }
+.team-col.re .roster-item { border-left-color: var(--re); }
+.roster-item.me { outline: 2px solid var(--tx2); }
+.roster-item.host::after { content: '👑'; font-size: 12px; }
+
+/* ── 카운트다운 ── */
+#scr-count { background: rgba(14,17,23,.85); }
+#count-num {
+  font-size: 120px; color: var(--warn); text-shadow: 6px 6px 0 #3a2b00;
+  animation: pop .9s steps(3) infinite;
+}
+@keyframes pop { 0% { transform: scale(1.25); } 100% { transform: scale(1); } }
+
+/* ═══════════ 로딩 ═══════════ */
+#loading {
+  position: fixed; inset: 0; z-index: 40; background: var(--bg);
+  display: flex; flex-direction: column; gap: 16px; align-items: center; justify-content: center;
+  color: var(--tx2); font-size: 14px;
+}
+.spin { width: 26px; height: 26px; border: 4px solid var(--line); border-top-color: var(--cy); animation: rot 0.8s steps(8) infinite; }
+@keyframes rot { to { transform: rotate(360deg); } }
+
+/* ═══════════ HUD (ui/hud.js가 내부 렌더 — 클래스 계약) ═══════════ */
+#hud { position: fixed; inset: 0; z-index: 20; pointer-events: none; }
+#hud > * { pointer-events: auto; }
+
+.hud-top {
+  position: absolute; top: env(safe-area-inset-top, 6px); left: 50%; transform: translateX(-50%);
+  display: flex; gap: 14px; align-items: center; background: rgba(19,22,31,.88);
+  border: var(--px) solid var(--line); padding: 6px 16px;
+}
+.hud-timer { font-size: 22px; color: var(--tx); min-width: 86px; text-align: center; }
+.hud-timer.low { color: var(--bad); animation: blink 1s steps(2) infinite; }
+@keyframes blink { 50% { opacity: .35; } }
+.hud-score-ox { font-size: 19px; color: var(--ox); }
+.hud-score-re { font-size: 19px; color: var(--re); }
+
+.badge {
+  position: absolute; top: env(safe-area-inset-top, 6px); right: 8px;
+  font-size: 11px; padding: 5px 9px; background: rgba(19,22,31,.88); border: var(--px) solid var(--line);
+  color: var(--tx2);
+}
+.badge.ok { color: var(--ok); border-color: #14532d; }
+.badge.warn { color: var(--warn); }
+.badge.off { color: var(--tx2); }
+
+.hud-objective {
+  position: absolute; top: 64px; left: 50%; transform: translateX(-50%);
+  max-width: min(560px, 92vw); text-align: center; font-size: 14px; line-height: 1.6;
+  background: rgba(13,39,51,.92); border: var(--px) solid var(--cy); color: var(--tx); padding: 10px 18px;
+  transition: opacity .4s;
+}
+.hud-objective.min { opacity: 0; pointer-events: none; }
+
+.hud-roster {
+  position: absolute; left: 8px; top: 64px; font-size: 11px;
+  background: rgba(19,22,31,.85); border: var(--px) solid var(--line); padding: 8px 10px;
+  max-width: 170px;
+}
+
+.toast {
+  position: absolute; bottom: 24vh; left: 50%; transform: translateX(-50%);
+  background: #000; border: var(--px) solid var(--warn); color: var(--warn);
+  font-size: 14px; padding: 9px 16px; white-space: nowrap;
+}
+
+/* ═══════════ 터치 존 ═══════════ */
+#joystick-zone { position: fixed; left: 0; bottom: 0; width: 45vw; height: 46vh; z-index: 10; }
+#look-zone     { position: fixed; right: 0; bottom: 0; width: 55vw; height: 72vh; z-index: 10; }
+
+@media (max-width: 430px) {
+  .form-row3 { grid-template-columns: 1fr 1fr; }
+  .form-row3 > div:last-child { grid-column: 1 / -1; }
+  #mission-cards { grid-template-columns: 1fr; }
+}

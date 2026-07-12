@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<title>ChemVerse ARENA — 실험 준비물 쟁탈전</title>
+<link rel="stylesheet" href="css/arena.css">
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js",
+    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/"
+  }
+}
+</script>
+</head>
+<body>
+
+<!-- ═══════════ 3D 캔버스 ═══════════ -->
+<canvas id="gl"></canvas>
+
+<!-- ═══════════ 로비 오버레이 (내부 DOM: ui/lobby.js 소유) ═══════════ -->
+<div id="lobby">
+
+  <!-- 화면 1: 로그인 + 미션 선택 -->
+  <section id="scr-login" class="scr">
+    <div class="lobby-card">
+      <div class="brand">
+        <span class="brand-mark">⚗</span>
+        <h1>ChemVerse <em>ARENA</em></h1>
+        <p class="kicker">용인고등학교 · 실험 준비물 쟁탈전</p>
+      </div>
+
+      <div class="form-row3">
+        <div>
+          <label for="in-grade">학년</label>
+          <select id="in-grade"><option>1</option><option selected>2</option><option>3</option></select>
+        </div>
+        <div>
+          <label for="in-cls">반</label>
+          <select id="in-cls"></select> <!-- lobby.js가 1~12 채움 -->
+        </div>
+        <div>
+          <label for="in-name">이름</label>
+          <input id="in-name" type="text" maxlength="8" placeholder="김용인" autocomplete="off">
+        </div>
+      </div>
+
+      <label class="lbl-block">미션 선택</label>
+      <div id="mission-cards"></div> <!-- lobby.js가 .mcard 렌더 -->
+
+      <div class="form-row2">
+        <div>
+          <label for="in-room">방 번호 <span class="hint">(같은 방끼리 대전)</span></label>
+          <input id="in-room" type="number" min="1" max="99" value="1" inputmode="numeric">
+        </div>
+        <div class="join-btns">
+          <button id="btn-join" class="pxbtn primary">입장하기</button>
+          <button id="btn-solo" class="pxbtn ghost">혼자 연습 (오프라인)</button>
+        </div>
+      </div>
+      <p id="login-msg" class="login-msg"></p>
+    </div>
+  </section>
+
+  <!-- 화면 2: 대기실 -->
+  <section id="scr-wait" class="scr hidden">
+    <div class="lobby-card wide">
+      <h2 id="wait-title">대기실</h2>
+      <p id="wait-sub" class="kicker"></p>
+      <div class="team-cols">
+        <div class="team-col ox">
+          <button id="btn-team-ox" class="pxbtn ox">산화팀 합류</button>
+          <div id="roster-ox" class="roster"></div>
+        </div>
+        <div class="team-col re">
+          <button id="btn-team-re" class="pxbtn re">환원팀 합류</button>
+          <div id="roster-re" class="roster"></div>
+        </div>
+      </div>
+      <button id="btn-start" class="pxbtn primary big">게임 시작</button>
+      <p id="wait-hint" class="login-msg"></p>
+      <button id="btn-leave" class="pxbtn ghost">나가기</button>
+    </div>
+  </section>
+
+  <!-- 화면 3: 카운트다운 -->
+  <section id="scr-count" class="scr hidden">
+    <div id="count-num">3</div>
+  </section>
+
+</div>
+
+<!-- ═══════════ 로딩 ═══════════ -->
+<div id="loading" class="hidden"><div class="spin"></div><p>아레나 생성 중…</p></div>
+
+<!-- ═══════════ HUD (내부 DOM: ui/hud.js 소유) ═══════════ -->
+<div id="hud" class="hidden"></div>
+
+<!-- ═══════════ 터치 조작 존 ═══════════ -->
+<div id="joystick-zone"></div>
+<div id="look-zone"></div>
+
+<script type="module" src="js/main.js"></script>
+</body>
+</html>
