@@ -4,12 +4,12 @@
 // 멀티플레이가 활성화됩니다. 비워두면 자동으로 솔로 모드로 동작합니다.
 // ═══════════════════════════════════════════════════════════
 
-export const SUPABASE_URL = "";        // 예: "https://abcdefgh.supabase.co"
-export const SUPABASE_ANON_KEY = "";   // 예: "eyJhbGciOi..." (anon public 키 — 공개되어도 안전)
+export const SUPABASE_URL = "https://wmfpimitvymxkzbzckuk.supabase.co";        // 예: "https://abcdefgh.supabase.co"
+export const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6IndtZnBpbWl0dnlteGt6Ynpja3VrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODM3OTc3MjQsImV4cCI6MjA5OTM3MzcyNH0.YEuoYMlSnghx1C55JqV8BIl1WZsHNeMqMYt-tUgBP7U";   // 예: "eyJhbGciOi..." (anon public 키 — 공개되어도 안전)
 
 // 기본 접속 모드: 'auto' | 'solo' | 'supabase' | 'wsrelay'
 // 'auto' = Supabase 키가 있으면 supabase, 없으면 solo
-export const DEFAULT_MODE = "auto";
+export const DEFAULT_MODE = "supabase";
 
 // wsrelay 모드일 때 릴레이 주소 (교사 PC에서 node server/relay.js 실행 시)
 // 페이지를 relay가 서빙하면 자동 감지되므로 보통 비워둠
