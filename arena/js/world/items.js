@@ -399,8 +399,9 @@ function hash01(id) {
   return u;
 }
 
-const FLOAT_BASE_Y = 0.75;
+const FLOAT_BASE_Y = 0.9;  // 아이템 확대에 맞춰 크레이트 림 위로 상향
 const FLOAT_AMP = 0.08;
+const ITEM_SCALE = 1.15;   // 크레이트 내용물·드랍 표시 배율(사용자 요청: 크기 확대)
 const FLOAT_SPEED = 0.8; // rad/s (부유), 회전은 별도 속도 사용
 
 class FloatingItem {
@@ -437,7 +438,7 @@ export class ItemManager {
       this._crateFrames.set(c.id, frame);
 
       const content = c.kind === 'weapon' ? makeWeaponMesh(this.THREE, c.itemId) : makePartMesh(this.THREE, c.itemId);
-      content.scale.setScalar(0.85);
+      content.scale.setScalar(ITEM_SCALE);
       this.scene.add(content);
       const floating = new FloatingItem(content, c.pos, hash01(c.id) * Math.PI * 2);
       floating.update(0);
@@ -458,7 +459,7 @@ export class ItemManager {
   addDrop(id, itemId, pos) {
     if (this._drops.has(id)) return;
     const content = isWeaponItem(itemId) ? makeWeaponMesh(this.THREE, itemId) : makePartMesh(this.THREE, itemId);
-    content.scale.setScalar(0.85);
+    content.scale.setScalar(ITEM_SCALE);
     this.scene.add(content);
     const floating = new FloatingItem(content, pos, hash01(id) * Math.PI * 2);
     floating.update(this._t);

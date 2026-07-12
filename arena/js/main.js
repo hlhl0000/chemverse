@@ -162,6 +162,10 @@ async function startMatch({ mission, adapter, seed, t0, room, profile, team, ros
   engine.setQuality('tablet');
   const arena = buildArena(THREE, mission, seed);
   engine.scene.add(arena.group);
+  if (arena.env) { // G-1 테마: 안개·배경색을 지평선(노을) 색과 일치
+    engine.scene.fog.color.set(arena.env.fogColor);
+    engine.scene.background.set(arena.env.fogColor);
+  }
   const items = new ItemManager(engine.scene, arena, THREE);
   const effects = new Effects(engine.scene, THREE);
 
@@ -173,11 +177,19 @@ async function startMatch({ mission, adapter, seed, t0, room, profile, team, ros
   });
   controls.setColliders(arena.colliders);
   controls.setBounds(arena.bounds);
+  controls.setFirstPerson(true); // 매치 중 상시 1인칭(입장~제한시간 종료, 사용자 결정)
 
   const chr = buildVoxelCharacter(THREE, {
     teamColor: TEAM_COLOR[team], name: profile.name, seed,
   });
   controls.object.add(chr.group);
+
+  // 1인칭 뷰모델: 카메라 우하단에 현재 무기 실물 메쉬 부착
+  engine.scene.add(engine.camera); // 카메라 자식(뷰모델) 렌더를 위해 씬에 등록
+  const vmSlot = new THREE.Group();
+  vmSlot.position.set(0.26, -0.22, -0.5);
+  vmSlot.rotation.set(-0.05, 0, 0);
+  engine.camera.add(vmSlot);
 
   // 스폰: 같은 팀 로스터에서 내 순번(id 사전순)
   const mates = roster.filter((p) => (p.profile.team || 'OX') === team)
@@ -237,7 +249,9 @@ async function startMatch({ mission, adapter, seed, t0, room, profile, team, ros
   function applyWeapon() {
     const w = currentWeaponId();
     combat.setWeapon(w);
-    chr.setHeld(makeWeaponMesh(THREE, w));
+    chr.setHeld(makeWeaponMesh(THREE, w));       // 3인칭·원격 시점용(캐릭터 손)
+    while (vmSlot.children.length > 0) vmSlot.remove(vmSlot.children[0]);
+    vmSlot.add(makeWeaponMesh(THREE, w));        // 1인칭 뷰모델(공유 캐시 — dispose 금지)
     refreshWeaponHud();
   }
   function refreshWeaponHud() {
@@ -331,6 +345,7 @@ async function startMatch({ mission, adapter, seed, t0, room, profile, team, ros
   gc.on('end', (e) => {
     if (matchEnded) return;
     matchEnded = true;
+    controls.setFirstPerson(false); // 매치 종료 → 3인칭 복귀(결과 화면 배경)
     if (referee) referee.stop();
     hud.closeQuiz();
     hud.showRespawn(null);
@@ -362,6 +377,10 @@ async function startMatch({ mission, adapter, seed, t0, room, profile, team, ros
   engine.onUpdate((dt) => {
     if (!myDead) controls.update(dt);
     chr.update(dt, myDead ? 0 : controls.speedRatio);
+    // 1인칭이면 내 캐릭터 숨김 + 뷰모델 표시(전환 블렌드 기준 0.6)
+    const fpAmt = controls.fpAmount();
+    chr.group.visible = fpAmt < 0.6;
+    vmSlot.visible = fpAmt >= 0.6 && !myDead && !matchEnded;
     rp.update(dt);
     items.update(dt);
     hud.update(dt);

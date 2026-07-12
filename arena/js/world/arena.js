@@ -12,6 +12,8 @@
 import { mulberry32 } from '../missions/registry.js';
 import { rollCrates } from '../game/loot.js';
 import { makePartMesh } from './items.js';
+import { buildTheme } from './theme.js';
+import { buildProps } from './props.js';
 
 const HALF_X = 20;    // 맵 절반 폭 (40m)
 const HALF_Z = 14;    // 맵 절반 길이 (28m)
@@ -75,31 +77,19 @@ export function buildArena(THREE, missionDef, seed) {
   const group = new THREE.Group();
   const colliders = [];
 
-  // ── 조명 (그림자 없음) ──
-  const hemi = new THREE.HemisphereLight(0x9fd0ff, 0x1a1f2e, 1.1);
-  const dir = new THREE.DirectionalLight(0xfff2d8, 0.7);
-  dir.position.set(8, 16, 6);
+  // ── 조명 (그림자 없음) — 노을 지는 옥상 톤(G-1) ──
+  const hemi = new THREE.HemisphereLight(0xffc9a0, 0x232031, 1.0);
+  const dir = new THREE.DirectionalLight(0xffd9ad, 0.75);
+  dir.position.set(-14, 18, 8); // 서쪽 낮은 태양
   dir.castShadow = false;
   group.add(hemi, dir);
 
-  // ── 바닥 + 그리드 ──
-  const floorGeo = new THREE.PlaneGeometry(HALF_X * 2, HALF_Z * 2);
-  floorGeo.rotateX(-Math.PI / 2);
-  const floorMat = new THREE.MeshLambertMaterial({ color: 0x161b26 });
-  const floor = new THREE.Mesh(floorGeo, floorMat);
-  group.add(floor);
+  // ── G-1 테마: 타일 바닥·스카이돔·스카이라인·안전 펜스 (world/theme.js) ──
+  const theme = buildTheme(THREE, rng, { halfX: HALF_X, halfZ: HALF_Z });
+  group.add(theme.group);
 
-  const grid = new THREE.GridHelper(Math.max(HALF_X, HALF_Z) * 2, 20, 0x2a3348, 0x1e2530);
-  grid.position.y = 0.01;
-  group.add(grid);
-
-  // ── 외벽 4면 ──
-  const wallMat = new THREE.MeshLambertMaterial({ color: 0x232a3a });
+  // ── 외벽 콜라이더 4면 (시각은 theme.js의 펜스가 담당 — 보이지 않는 벽) ──
   function addWall(cx, cz, sx, sz) {
-    const geo = new THREE.BoxGeometry(sx, WALL_H, sz);
-    const mesh = new THREE.Mesh(geo, wallMat);
-    mesh.position.set(cx, WALL_H / 2, cz);
-    group.add(mesh);
     colliders.push(new THREE.Box3(
       new THREE.Vector3(cx - sx / 2, 0, cz - sz / 2),
       new THREE.Vector3(cx + sx / 2, WALL_H, cz + sz / 2)
@@ -182,58 +172,26 @@ export function buildArena(THREE, missionDef, seed) {
     }
   }
 
-  // ── 엄폐 블록: InstancedMesh, x=0 기준 좌우 대칭 미러 배치 ──
-  const HALF_COVER_COUNT = 9;
-  const coverGeo = new THREE.BoxGeometry(1, 1, 1);
-  const coverMat = new THREE.MeshLambertMaterial({ color: 0x39465e, flatShading: true });
-  const coverInst = new THREE.InstancedMesh(coverGeo, coverMat, HALF_COVER_COUNT * 2);
-  const dummy = new THREE.Object3D();
+  // ── G-2 엄폐물: 실험실 가구 5종 (world/props.js) — 종류별 InstancedMesh ──
   const coverAvoid = [
     { x: baseCenters.OX.x, z: 0, r: 5 },
     { x: baseCenters.RE.x, z: 0, r: 5 },
     { x: 0, z: 0, r: 3.5 },
   ];
-  let placed = 0;
-  for (let i = 0; i < HALF_COVER_COUNT; i++) {
-    let x = 0, z = 0, tries = 0, ok = false;
-    do {
-      x = 3.5 + rng() * (HALF_X - 6.5);        // x>0 절반에서만 표본 추출
-      z = -HALF_Z + 2 + rng() * (HALF_Z * 2 - 4);
-      ok = coverAvoid.every((a) => Math.hypot(x - a.x, z - a.z) > a.r);
-      tries += 1;
-    } while (!ok && tries < 20);
+  const props = buildProps(THREE, rng, { halfX: HALF_X, halfZ: HALF_Z, avoid: coverAvoid });
+  group.add(props.group);
+  colliders.push(...props.colliders);
 
-    const w = 1.0 + rng() * 1.2;
-    const h = 1.0 + rng() * 0.6;
-    const d = 1.0 + rng() * 1.2;
-    const ry = rng() * Math.PI;
-
-    // 오른쪽(x>0) 인스턴스
-    dummy.position.set(x, h / 2, z);
-    dummy.rotation.set(0, ry, 0);
-    dummy.scale.set(w, h, d);
-    dummy.updateMatrix();
-    coverInst.setMatrixAt(placed, dummy.matrix);
-    colliders.push(new THREE.Box3(
-      new THREE.Vector3(x - w / 2, 0, z - d / 2),
-      new THREE.Vector3(x + w / 2, h, z + d / 2)
-    ));
-    placed += 1;
-
-    // 왼쪽(x<0) 미러 인스턴스 — 좌우 대칭
-    dummy.position.set(-x, h / 2, z);
-    dummy.rotation.set(0, -ry, 0);
-    dummy.scale.set(w, h, d);
-    dummy.updateMatrix();
-    coverInst.setMatrixAt(placed, dummy.matrix);
-    colliders.push(new THREE.Box3(
-      new THREE.Vector3(-x - w / 2, 0, z - d / 2),
-      new THREE.Vector3(-x + w / 2, h, z + d / 2)
-    ));
-    placed += 1;
+  // (x,z)가 반경 r 안에서 콜라이더와 겹치는지 — 크레이트 배치·스폰 보정 공용
+  function isBlocked(x, z, r) {
+    for (const b of colliders) {
+      const cx = THREE.MathUtils.clamp(x, b.min.x, b.max.x);
+      const cz = THREE.MathUtils.clamp(z, b.min.z, b.max.z);
+      const dx = x - cx, dz = z - cz;
+      if (dx * dx + dz * dz < r * r) return true;
+    }
+    return false;
   }
-  coverInst.instanceMatrix.needsUpdate = true;
-  group.add(coverInst);
 
   // ── 크레이트 배치 데이터 (시각은 world/items.js의 ItemManager가 렌더) ──
   // 내용물 분배(부품 6종×2 + 무기 4개 = 16개, 중앙/외곽 지정)는 game/loot.js의
@@ -243,16 +201,19 @@ export function buildArena(THREE, missionDef, seed) {
   const crates = [];
   let edgeIdx = 0;
   for (const item of rolled) {
-    let x, z;
-    if (item.zone === 'edge') {
-      const sideSign = edgeIdx % 2 === 0 ? 1 : -1;
-      x = sideSign * (9 + rng() * 5.5);
-      z = (rng() - 0.5) * (HALF_Z * 2 - 4);
-      edgeIdx += 1;
-    } else {
-      x = (rng() - 0.5) * 6.5;
-      z = (rng() - 0.5) * 9;
-    }
+    let x = 0, z = 0, tries = 0;
+    do {
+      if (item.zone === 'edge') {
+        const sideSign = edgeIdx % 2 === 0 ? 1 : -1;
+        x = sideSign * (9 + rng() * 5.5);
+        z = (rng() - 0.5) * (HALF_Z * 2 - 4);
+      } else {
+        x = (rng() - 0.5) * 6.5;
+        z = (rng() - 0.5) * 9;
+      }
+      tries += 1;
+    } while (isBlocked(x, z, 0.95) && tries < 25); // 가구·기존 크레이트와 겹침 방지
+    if (item.zone === 'edge') edgeIdx += 1;
     crates.push({ id: item.id, pos: [x, 0, z], kind: item.kind, itemId: item.itemId });
     // 간단한 충돌 박스(상자 크기 근사) — 시각은 items.js가 그린다
     colliders.push(new THREE.Box3(
@@ -264,6 +225,23 @@ export function buildArena(THREE, missionDef, seed) {
   // 하위 호환: zones.supply는 crates에서 파생
   const supply = crates.map((c) => ({ pos: c.pos, itemId: c.itemId }));
 
+  // ── 스폰 안전 보정: 스폰 지점이 장애물(가구·크레이트·깃대)과 겹치면
+  // 주변 링을 탐색해 빈 지점으로 이동(끼임 방지). 콜라이더가 전부 확정된 뒤 수행.
+  // 결정적(rng 미사용, 탐색 순서 고정) — 전 클라이언트 동일 결과.
+  const SPAWN_CLEAR_R = 0.6; // 플레이어 반지름 0.35 + 여유
+  function resolveSpawn(s) {
+    if (!isBlocked(s.pos[0], s.pos[2], SPAWN_CLEAR_R)) return;
+    for (const rad of [0.8, 1.2, 1.8, 2.4, 3.0]) {
+      for (let k = 0; k < 8; k++) {
+        const a = (k / 8) * Math.PI * 2;
+        const x = THREE.MathUtils.clamp(s.pos[0] + Math.cos(a) * rad, bounds.minX, bounds.maxX);
+        const z = THREE.MathUtils.clamp(s.pos[2] + Math.sin(a) * rad, bounds.minZ, bounds.maxZ);
+        if (!isBlocked(x, z, SPAWN_CLEAR_R)) { s.pos[0] = x; s.pos[2] = z; return; }
+      }
+    }
+  }
+  for (const team of ['OX', 'RE']) spawns[team].forEach(resolveSpawn);
+
   // ── 조립대 진행 표시: 장착된 부품 실물 메쉬를 패드 위 원형 배열로 부착 ──
   function setAssembled(team, itemIds) {
     const ag = assembledGroups[team];
@@ -274,7 +252,7 @@ export function buildArena(THREE, missionDef, seed) {
     const radius = 1.15;
     list.forEach((itemId, i) => {
       const m = makePartMesh(THREE, itemId);
-      m.scale.setScalar(0.7);
+      m.scale.setScalar(0.85); // 아이템 크기 확대(사용자 요청)
       const ang = (i / Math.max(1, n)) * Math.PI * 2;
       m.position.set(Math.cos(ang) * radius, 0.85, Math.sin(ang) * radius);
       ag.add(m);
@@ -289,6 +267,7 @@ export function buildArena(THREE, missionDef, seed) {
     zones: { assembly: zonesAssembly, supply },
     crates,
     setAssembled,
+    env: theme.env, // G-1: main.js가 scene.fog/background 색을 지평선과 일치시킴
     dispose() {
       // 조립대에 부착된 부품 메쉬(items.js 공유 자원)는 먼저 떼어내 dispose 대상에서 제외
       for (const team of Object.keys(assembledGroups)) {

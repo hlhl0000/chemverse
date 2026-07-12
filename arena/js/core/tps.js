@@ -18,6 +18,11 @@ const LOOK_SENS_TOUCH = 0.0045;
 const LOOK_SENS_MOUSE = 0.0028;
 const CAM_COLLIDE_MARGIN = 0.3; // 카메라 오클루전: 벽 표면에서 띄울 여유(m)
 const CAM_MIN_DIST = 0.6;       // 카메라가 피벗에 붙을 수 있는 최소 거리(m)
+const LOOK_SMOOTH_K = 25;    // 시선 스무딩(~40ms 지연) — 태블릿 pointermove 지터 흡수
+const FP_BLEND_K = 7;        // 1인칭↔3인칭 전환 속도(~0.4s)
+const FP_FWD_EPS = 0.02;     // 1인칭 카메라를 눈 위치에서 살짝 전방으로(자기 몸 클리핑 방지)
+const PITCH_MIN_FP = THREE.MathUtils.degToRad(-65); // 1인칭은 발밑 픽업 확인용으로 하향 확대
+const PITCH_MAX_FP = THREE.MathUtils.degToRad(75);
 
 // 선분(원점 o, 단위방향 d, 길이 L) vs 마진 m 확장 AABB 슬랩 교차 — 첫 진입 t 반환(미교차/내부 시작은 -1)
 // 카메라 오클루전용 (Fable 검수 추가). THREE.Raycaster 없이 순수 산술 — 프레임당 할당 0.
@@ -66,6 +71,13 @@ export class TPSControls {
 
     this._yaw = 0;
     this._pitch = 0;
+    // 시선 스무딩: 입력은 target에 누적, 실제 yaw/pitch는 update()에서 지수 보간.
+    // 태블릿에서 pointermove가 불규칙 간격으로 도착해도 프레임 단위로 매끄럽게 회전.
+    this._yawTarget = 0;
+    this._pitchTarget = 0;
+    // 1인칭 모드(전투 뷰): setFirstPerson()으로 전환, _fpBlend 0(3인칭)~1(1인칭)
+    this._fp = false;
+    this._fpBlend = 0;
 
     this.joystick = joystickZone ? new Joystick(joystickZone) : null;
 
@@ -78,6 +90,9 @@ export class TPSControls {
     this._camPos = new THREE.Vector3();
     this._idealPos = new THREE.Vector3();
     this._euler = new THREE.Euler(0, 0, 0, 'YXZ');
+    this._fwd = new THREE.Vector3();       // 시선 전방 단위벡터(피치 포함)
+    this._fpPos = new THREE.Vector3();     // 1인칭 카메라 위치
+    this._lookTarget = new THREE.Vector3();
 
     this.speedRatio = 0; // 계약: 0~1, 걷기 애니메이션용
     this._an = 0;
@@ -141,12 +156,27 @@ export class TPSControls {
     this._syncCameraInstant();
   }
 
+  // 입력은 target에만 누적 — 실제 회전은 update()에서 지수 보간(태블릿 지터 흡수)
   _applyLook(dx, dy, sens) {
-    this._yaw -= dx * sens;
-    this._pitch -= dy * sens;
-    this._pitch = THREE.MathUtils.clamp(this._pitch, PITCH_MIN, PITCH_MAX);
-    this.object.rotation.y = this._yaw;
+    this._yawTarget -= dx * sens;
+    this._pitchTarget -= dy * sens;
+    const [pmin, pmax] = this._pitchRange();
+    this._pitchTarget = THREE.MathUtils.clamp(this._pitchTarget, pmin, pmax);
   }
+
+  _pitchRange() {
+    return this._fp ? [PITCH_MIN_FP, PITCH_MAX_FP] : [PITCH_MIN, PITCH_MAX];
+  }
+
+  // 1인칭(전투 뷰) 전환 — 매치 시작 시 true, 종료 시 false (main.js가 호출)
+  setFirstPerson(on) {
+    this._fp = !!on;
+    const [pmin, pmax] = this._pitchRange();
+    this._pitchTarget = THREE.MathUtils.clamp(this._pitchTarget, pmin, pmax);
+  }
+
+  isFirstPerson() { return this._fp; }
+  fpAmount() { return this._fpBlend; } // 0=완전 3인칭, 1=완전 1인칭 (캐릭터 숨김 판단용)
 
   setColliders(list) { this.colliders = list || []; }
   setBounds(b) { this.bounds = b || null; }
@@ -154,9 +184,54 @@ export class TPSControls {
   teleport(pos, ry = 0) {
     this.object.position.set(pos[0], pos[1] || 0, pos[2]);
     this._yaw = ry;
+    this._yawTarget = ry;
     this._pitch = 0;
+    this._pitchTarget = 0;
     this.object.rotation.y = this._yaw;
+    this._depenetrate(); // 스폰 지점이 장애물과 겹치면 밀어냄(끼임 방지)
     this._syncCameraInstant();
+  }
+
+  // 현재 위치가 콜라이더와 겹칠 때 가장 가까운 바깥으로 밀어낸다.
+  // 시작/리스폰 지점이 장애물 위일 때의 끼임 현상 방지(arena.js 스폰 보정의 2차 안전망).
+  _depenetrate() {
+    const pos = this.object.position;
+    const R = RADIUS + 0.02;
+    for (let iter = 0; iter < 6; iter++) {
+      let pushed = false;
+      for (const box of this.colliders) {
+        const cx = THREE.MathUtils.clamp(pos.x, box.min.x, box.max.x);
+        const cz = THREE.MathUtils.clamp(pos.z, box.min.z, box.max.z);
+        const dx = pos.x - cx, dz = pos.z - cz;
+        const d2 = dx * dx + dz * dz;
+        if (d2 >= RADIUS * RADIUS) continue;
+        if (d2 > 1e-8) {
+          const d = Math.sqrt(d2);
+          pos.x = cx + (dx / d) * R;
+          pos.z = cz + (dz / d) * R;
+        } else {
+          // 박스 내부: 가장 가까운 면으로 탈출
+          const exits = [
+            box.max.x + R - pos.x,        // +x
+            pos.x - (box.min.x - R),      // -x
+            box.max.z + R - pos.z,        // +z
+            pos.z - (box.min.z - R),      // -z
+          ];
+          let mi = 0;
+          for (let i = 1; i < 4; i++) if (exits[i] < exits[mi]) mi = i;
+          if (mi === 0) pos.x = box.max.x + R;
+          else if (mi === 1) pos.x = box.min.x - R;
+          else if (mi === 2) pos.z = box.max.z + R;
+          else pos.z = box.min.z - R;
+        }
+        pushed = true;
+      }
+      if (!pushed) break;
+    }
+    if (this.bounds) {
+      pos.x = THREE.MathUtils.clamp(pos.x, this.bounds.minX, this.bounds.maxX);
+      pos.z = THREE.MathUtils.clamp(pos.z, this.bounds.minZ, this.bounds.maxZ);
+    }
   }
 
   getNetState() {
@@ -169,6 +244,12 @@ export class TPSControls {
   }
 
   update(dt) {
+    // 시선 스무딩: target을 향해 지수 보간 — 이동 계산 전에 갱신해 최신 요를 사용
+    const lk = 1 - Math.exp(-LOOK_SMOOTH_K * dt);
+    this._yaw += (this._yawTarget - this._yaw) * lk;
+    this._pitch += (this._pitchTarget - this._pitch) * lk;
+    this.object.rotation.y = this._yaw;
+
     let mx = 0, mz = 0; // mx:좌우(strafe), mz:전진(+)
     const jv = this.joystick?.getVector() || { x: 0, y: 0 };
     if (Math.hypot(jv.x, jv.y) > DEADZONE) {
@@ -250,26 +331,58 @@ export class TPSControls {
     }
   }
 
+  // 1인칭/3인칭 통합 카메라. _fpBlend=0이면 기존 3인칭 붐(오클루전 포함)과 동일,
+  // 1이면 눈높이 1인칭(위치 지연 없음 — 멀미 방지). 중간값은 전환 연출.
   _updateCamera(dt) {
+    const bt = 1 - Math.exp(-FP_BLEND_K * dt);
+    this._fpBlend += ((this._fp ? 1 : 0) - this._fpBlend) * bt;
+    const b = this._fpBlend;
+
     this._pivot.copy(this.object.position);
     this._pivot.y += EYE_HEIGHT;
+
+    // 시선 전방 단위벡터(피치 포함)
+    this._euler.set(this._pitch, this._yaw, 0, 'YXZ');
+    this._fwd.set(0, 0, -1).applyEuler(this._euler);
+
+    // 3인칭 이상 위치(오클루전 포함) → 1인칭 위치와 블렌드
     this._computeIdealCameraPos();
-    this._occludeToward(this._idealPos);          // 목표 지점을 가림 없는 곳으로
-    const t = 1 - Math.exp(-CAM_LERP_K * dt);
-    this._camPos.lerp(this._idealPos, t);
-    this._occludeToward(this._camPos);            // 보간 중간 위치도 벽 통과 금지
+    this._occludeToward(this._idealPos);
+    this._fpPos.copy(this._pivot).addScaledVector(this._fwd, FP_FWD_EPS);
+    this._idealPos.lerp(this._fpPos, b);
+
+    if (b > 0.98) {
+      this._camPos.copy(this._idealPos); // 1인칭: 위치 지연 금지
+    } else {
+      const t = 1 - Math.exp(-CAM_LERP_K * dt);
+      this._camPos.lerp(this._idealPos, t);
+      if (b < 0.5) this._occludeToward(this._camPos); // 3인칭 보간 중 벽 통과 금지
+    }
     this.engine.camera.position.copy(this._camPos);
-    this.engine.camera.lookAt(this._pivot);
+
+    // 시선: b=0 → 피벗 응시(기존 3인칭과 동일), b=1 → 전방 8m 응시(1인칭)
+    this._lookTarget.copy(this._pivot).addScaledVector(this._fwd, b * 8);
+    this.engine.camera.lookAt(this._lookTarget);
   }
 
   _syncCameraInstant() {
+    this._fpBlend = this._fp ? 1 : 0;
     this._pivot.copy(this.object.position);
     this._pivot.y += EYE_HEIGHT;
-    this._computeIdealCameraPos();
-    this._occludeToward(this._idealPos);
-    this._camPos.copy(this._idealPos);
-    this.engine.camera.position.copy(this._camPos);
-    this.engine.camera.lookAt(this._pivot);
+    this._euler.set(this._pitch, this._yaw, 0, 'YXZ');
+    this._fwd.set(0, 0, -1).applyEuler(this._euler);
+    if (this._fp) {
+      this._camPos.copy(this._pivot).addScaledVector(this._fwd, FP_FWD_EPS);
+      this.engine.camera.position.copy(this._camPos);
+      this._lookTarget.copy(this._pivot).addScaledVector(this._fwd, 8);
+      this.engine.camera.lookAt(this._lookTarget);
+    } else {
+      this._computeIdealCameraPos();
+      this._occludeToward(this._idealPos);
+      this._camPos.copy(this._idealPos);
+      this.engine.camera.position.copy(this._camPos);
+      this.engine.camera.lookAt(this._pivot);
+    }
   }
 
   // getAimRay() -> {origin:[x,y,z], dir:[x,y,z]} — 카메라 위치·전방 단위벡터(월드).
