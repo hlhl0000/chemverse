@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<title>ChemVerse — 용인고 가상 과학실</title>
+<link rel="stylesheet" href="css/main.css">
+<link rel="stylesheet" href="css/hud.css">
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js",
+    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/"
+  }
+}
+</script>
+</head>
+<body>
+
+<!-- ═══════════ 3D 캔버스 ═══════════ -->
+<canvas id="gl"></canvas>
+
+<!-- ═══════════ 로비 오버레이 ═══════════ -->
+<div id="lobby">
+  <div class="lobby-card">
+    <div class="lobby-brand">
+      <span class="brand-mark">⬡</span>
+      <h1>ChemVerse</h1>
+      <p class="brand-sub">용인고등학교 · 웹 기반 3D 가상 과학실</p>
+    </div>
+    <div class="lobby-form">
+      <label for="in-name">이름</label>
+      <input id="in-name" type="text" maxlength="10" placeholder="예: 김용인" autocomplete="off">
+      <label for="in-room">방 코드 <span class="hint">(같은 모둠은 같은 코드)</span></label>
+      <input id="in-room" type="text" maxlength="20" placeholder="예: 2-3-1모둠" autocomplete="off">
+      <label>그래픽</label>
+      <div class="seg" id="seg-quality">
+        <button data-v="tablet" class="on">태블릿 (권장)</button>
+        <button data-v="high">고사양</button>
+      </div>
+      <button id="btn-join" class="btn-primary">함께 입장</button>
+      <button id="btn-solo" class="btn-ghost">혼자 탐험 (오프라인)</button>
+    </div>
+    <p id="lobby-msg" class="lobby-msg"></p>
+  </div>
+</div>
+
+<!-- ═══════════ 로딩 ═══════════ -->
+<div id="loading" class="hidden"><div class="spin"></div><p>공간 생성 중…</p></div>
+
+<!-- ═══════════ HUD (에이전트 B: ui/hud.js 소유) ═══════════ -->
+<div id="hud" class="hidden">
+  <div id="hud-status"></div>       <!-- 접속 모드·인원 뱃지 -->
+  <div id="hud-readouts"></div>     <!-- P/V/n/T 수치 패널 -->
+  <div id="hud-checklist"></div>    <!-- 조립 체크리스트 -->
+  <div id="hud-controls"></div>     <!-- 히터/밸브/피스톤 컨트롤 -->
+  <div id="hud-graphs"></div>       <!-- 실시간 그래프 (접이식) -->
+  <div id="hud-toast"></div>        <!-- 짧은 안내 메시지 -->
+  <div id="exp-picker" class="hidden"></div> <!-- 실험 선택 모달 -->
+  <div id="carry-hint" class="hidden"></div> <!-- 들고 있는 기구 안내 -->
+</div>
+
+<!-- ═══════════ 터치 조작 존 (에이전트 A: ui/joystick.js 소유) ═══════════ -->
+<div id="joystick-zone"></div>
+<div id="look-zone"></div>
+
+<script type="module" src="js/main.js"></script>
+</body>
+</html>

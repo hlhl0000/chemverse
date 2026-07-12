@@ -1,0 +1,168 @@
+/* ═══════════════════════════════════════════════════════════
+   HUD 내부 스타일 — 소유: 에이전트 B (디자인 시스템 v2.0 준수)
+   배치(위치/좌표)는 css/main.css의 #hud-* 프레임이 담당한다.
+   여기서는 각 패널 "내부" 모양만 정의한다. 장식색 금지, colorblind-safe.
+   ═══════════════════════════════════════════════════════════ */
+
+.hud-mono { font-family: var(--mono); }
+
+/* ── 패널 공통 ── */
+.hud-panel {
+  background: var(--s1);
+  background: color-mix(in srgb, var(--s1) 90%, transparent);
+  border: 1px solid var(--b2);
+  border-radius: 12px;
+  backdrop-filter: blur(6px);
+  padding: 10px 14px;
+}
+
+/* ── 상태 뱃지 ── */
+.hud-status-badge { display: flex; align-items: center; gap: 8px; }
+.hud-dot { width: 9px; height: 9px; border-radius: 50%; flex: none; box-shadow: 0 0 6px currentColor; }
+.hud-status-mode { font-size: 13px; color: var(--t1); letter-spacing: .02em; }
+.hud-status-count { font-size: 12.5px; color: var(--t2); }
+
+/* ── 리드아웃 패널 (P/V/n/T) ── */
+.hud-readouts { width: 220px; display: flex; flex-direction: column; gap: 6px; }
+.hud-ro-row { display: flex; align-items: baseline; gap: 8px; }
+.hud-ro-label { flex: 1; font-size: 12.5px; color: var(--t2); }
+.hud-ro-value { font-size: 16px; color: var(--t1); font-variant-numeric: tabular-nums; }
+.hud-ro-unit { font-size: 11px; color: var(--t3); min-width: 28px; }
+
+/* ── 체크리스트 패널 ── */
+.hud-checklist { width: 220px; }
+.hud-checklist-head { display: flex; align-items: center; justify-content: space-between; gap: 8px;
+  font-size: 13px; color: var(--t1); margin-bottom: 6px; }
+.hud-badge { font-size: 10.5px; padding: 2px 7px; border-radius: 999px; letter-spacing: .03em; }
+.hud-badge-teal { background: rgba(6,214,160,.16); color: var(--data-teal); border: 1px solid rgba(6,214,160,.4); }
+.hud-badge-level { background: var(--s3); color: var(--t2); border: 1px solid var(--b2); }
+.hud-badge-wait { background: rgba(244,162,97,.16); color: var(--data-amber); border: 1px solid rgba(244,162,97,.4); }
+.hud-missing-list, .hud-hint-list { list-style: none; display: flex; flex-direction: column; gap: 4px; margin-top: 4px; }
+.hud-missing-list li { font-size: 12px; color: var(--data-coral); display: flex; align-items: center; gap: 5px; }
+.hud-dot-coral { color: var(--data-coral); font-size: 10px; }
+.hud-hint-list li { font-size: 11.5px; color: var(--t2); line-height: 1.4; }
+
+/* ── 컨트롤 바 ── */
+.hud-controls-bar {
+  display: flex; flex-wrap: wrap; align-items: flex-end; gap: 16px;
+  max-width: min(94vw, 760px);
+  transition: opacity .2s ease;
+}
+#hud-controls.inactive .hud-controls-bar { opacity: .45; pointer-events: none; }
+
+.hud-ctl { display: flex; flex-direction: column; gap: 5px; min-width: 96px; transition: opacity .15s ease; }
+.hud-ctl.disabled { opacity: .35; pointer-events: none; }
+.hud-ctl-label { display: flex; justify-content: space-between; gap: 8px; font-size: 12px; color: var(--t2); }
+.hud-ctl-value { color: var(--t1); font-size: 13px; }
+
+/* 슬라이더 */
+.hud-ctl-slider input[type="range"] {
+  -webkit-appearance: none; appearance: none;
+  width: 100%; height: 8px; border-radius: 999px;
+  background: var(--s3); outline: none; margin: 4px 0;
+}
+.hud-ctl-slider input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none; width: 28px; height: 28px; border-radius: 50%;
+  background: var(--data-cyan); border: 2px solid #061014;
+  box-shadow: 0 0 10px rgba(0,180,216,.6); cursor: pointer;
+}
+.hud-ctl-slider input[type="range"]::-moz-range-thumb {
+  width: 28px; height: 28px; border-radius: 50%; border: 2px solid #061014;
+  background: var(--data-cyan); box-shadow: 0 0 10px rgba(0,180,216,.6); cursor: pointer;
+}
+.hud-ctl-slider input[type="range"]::-moz-range-track { height: 8px; border-radius: 999px; background: var(--s3); }
+.hud-ctl-slider input[type="range"]:disabled::-webkit-slider-thumb { background: var(--data-neutral); box-shadow: none; }
+.hud-ctl-slider input[type="range"]:disabled::-moz-range-thumb { background: var(--data-neutral); box-shadow: none; }
+
+/* 토글 */
+.hud-toggle-btn {
+  min-height: 44px; min-width: 76px; padding: 8px 14px;
+  background: var(--s2); border: 1px solid var(--b2); border-radius: 9px;
+  color: var(--t2); font-size: 13.5px; cursor: pointer;
+}
+.hud-toggle-btn.on { background: var(--s4); border-color: var(--b-active); color: var(--t1); }
+
+/* 세그먼트 버튼 (css/main.css .seg 와 톤 통일) */
+.hud-seg { display: flex; gap: 6px; }
+.hud-seg button {
+  min-height: 44px; flex: 1;
+  background: var(--s2); border: 1px solid var(--b2); border-radius: 8px;
+  color: var(--t2); font-size: 12.5px; padding: 8px 10px; cursor: pointer; white-space: nowrap;
+}
+.hud-seg button.on { background: var(--s4); border-color: var(--b-active); color: var(--t1); }
+.hud-seg button:disabled { opacity: .4; cursor: not-allowed; }
+
+/* 스테퍼(+/-) */
+.hud-stepper-row { display: flex; align-items: center; gap: 8px; }
+.hud-stepper-row button {
+  min-width: 44px; min-height: 44px; border-radius: 9px;
+  background: var(--s2); border: 1px solid var(--b2); color: var(--t1);
+  font-size: 18px; line-height: 1; cursor: pointer;
+}
+.hud-stepper-row button:disabled { opacity: .4; cursor: not-allowed; }
+.hud-stepper-row .hud-ctl-value { min-width: 64px; text-align: center; font-size: 13.5px; }
+
+/* ── 그래프 패널 ── */
+.hud-graphs-panel { width: min(92vw, 340px); display: flex; flex-direction: column; gap: 8px; }
+.hud-graph-head { display: flex; align-items: center; gap: 8px; }
+.hud-graph-tabs { flex: 1; }
+.hud-graph-toggle-btn {
+  min-height: 40px; padding: 6px 12px; background: var(--s2); border: 1px solid var(--b2);
+  border-radius: 8px; color: var(--t2); font-size: 12px; cursor: pointer; white-space: nowrap;
+}
+.hud-graph-body { height: 176px; border-radius: 8px; overflow: hidden; }
+.hud-graph-body.collapsed { display: none; }
+.hud-graph-canvas { width: 100%; height: 100%; display: block; }
+
+/* ── 토스트 ── */
+#hud-toast { display: flex; justify-content: center; }
+.hud-toast-card {
+  background: var(--s1); border: 1px solid var(--b2); border-radius: 10px;
+  padding: 10px 18px; font-size: 13.5px; color: var(--t1);
+  box-shadow: 0 12px 32px rgba(0,0,0,.4);
+  opacity: 0; transform: translateY(-6px);
+  transition: opacity .25s ease, transform .25s ease;
+}
+.hud-toast-card.show { opacity: 1; transform: translateY(0); }
+.hud-toast-card.hide { opacity: 0; }
+
+/* ── 캐리 힌트 ── */
+.hud-carry-card {
+  background: color-mix(in srgb, var(--s1) 80%, transparent);
+  border: 1px solid var(--b-active); border-radius: 999px;
+  padding: 8px 16px; font-size: 12.5px; color: var(--t1);
+}
+
+/* ── 실험 선택 모달 ── */
+.hud-picker-modal {
+  position: relative; width: min(90vw, 420px); max-height: 78vh; overflow-y: auto;
+  background: var(--s1); border: 1px solid var(--b2); border-radius: 14px;
+  padding: 22px 18px 16px; box-shadow: 0 24px 80px rgba(0,0,0,.55);
+}
+.hud-picker-close {
+  position: absolute; top: 10px; right: 10px; min-width: 44px; min-height: 44px;
+  background: var(--s2); border: 1px solid var(--b2); border-radius: 9px;
+  color: var(--t2); font-size: 15px; cursor: pointer;
+}
+.hud-picker-title { font-size: 15px; color: var(--t1); letter-spacing: .04em; margin-bottom: 14px; }
+.hud-picker-list { display: flex; flex-direction: column; gap: 10px; }
+.hud-picker-item {
+  text-align: left; width: 100%; min-height: 44px;
+  background: var(--s2); border: 1px solid var(--b2); border-radius: 10px;
+  padding: 12px 14px; cursor: pointer; color: var(--t1);
+}
+.hud-picker-item:active { transform: scale(.99); }
+.hud-picker-item.dim { opacity: .5; cursor: not-allowed; }
+.hud-picker-item-name { display: flex; align-items: center; gap: 8px; font-size: 14.5px; margin-bottom: 4px; }
+.hud-picker-item-desc { font-size: 12px; color: var(--t2); line-height: 1.45; }
+
+/* ── 작은 화면(<700px) 축소 ── */
+@media (max-width: 700px) {
+  .hud-readouts, .hud-checklist { width: 168px; }
+  .hud-ro-label, .hud-hint-list li { font-size: 11px; }
+  .hud-ro-value { font-size: 14px; }
+  .hud-controls-bar { gap: 10px; }
+  .hud-ctl { min-width: 76px; }
+  .hud-graphs-panel { width: min(94vw, 260px); }
+  .hud-graph-body { height: 140px; }
+}
