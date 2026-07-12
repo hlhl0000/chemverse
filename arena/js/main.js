@@ -182,10 +182,16 @@ async function startMatch({ mission, adapter, seed, t0, profile, team, roster })
   controls.teleport(sp.pos, sp.ry);
 
   // 3) 원격 플레이어
+  // ★ 팀 정보 보강(Fable 검수 수정): presence/join의 profile은 입장 시점 것(team:null)이라
+  //   'peer' 이벤트만으로는 팀색을 알 수 없다. 팀 확정치는 msg 'team'을 병합해 온
+  //   RoomSession 로스터가 원본이므로, 매치 시작 시점 로스터로 id→team 맵을 만들어 병합한다.
   const rp = new RemotePlayers(engine.scene);
+  const teamById = new Map((roster || []).map((p) => [p.id, p.profile && p.profile.team]));
   adapter.on('peer', ({ id, profile: pf, state }) => {
     if (id === adapter.id || !state) return;
-    rp.upsert(id, pf || {}, state);
+    const merged = { ...(pf || {}) };
+    if (!merged.team && teamById.has(id)) merged.team = teamById.get(id);
+    rp.upsert(id, merged, state);
   });
   adapter.on('leave', ({ id }) => rp.remove(id));
 
