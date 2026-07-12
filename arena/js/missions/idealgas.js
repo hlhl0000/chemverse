@@ -69,7 +69,7 @@ registerMission({
   timeLimitSec: 600,
   objective: '부품 6종을 모아 조립대에서 측정 장치를 완성하고, 측정값으로 미지 기체의 분자량을 구해 정체를 밝히세요!',
   parts: PARTS,
-  arena: { supplyCenter: 6, supplyEdge: 4 },
+  arena: { supplyCenter: 10, supplyEdge: 6 },
 
   makeSecret,
 

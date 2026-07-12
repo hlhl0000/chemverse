@@ -82,6 +82,8 @@ export class TPSControls {
     this.speedRatio = 0; // 계약: 0~1, 걷기 애니메이션용
     this._an = 0;
 
+    this._aimDir = new THREE.Vector3(); // getAimRay() 재사용 벡터(할당 회피)
+
     this._keys = new Set();
     this._onKeyDown = (e) => this._keys.add(e.code);
     this._onKeyUp = (e) => this._keys.delete(e.code);
@@ -268,6 +270,17 @@ export class TPSControls {
     this._camPos.copy(this._idealPos);
     this.engine.camera.position.copy(this._camPos);
     this.engine.camera.lookAt(this._pivot);
+  }
+
+  // getAimRay() -> {origin:[x,y,z], dir:[x,y,z]} — 카메라 위치·전방 단위벡터(월드).
+  // 기존 오클루전 로직(raySlabAABB, _occludeToward 등)은 변경하지 않고 메서드만 추가(Fable 계약 §A-5).
+  getAimRay() {
+    const cam = this.engine.camera;
+    cam.getWorldDirection(this._aimDir);
+    return {
+      origin: [cam.position.x, cam.position.y, cam.position.z],
+      dir: [this._aimDir.x, this._aimDir.y, this._aimDir.z],
+    };
   }
 
   dispose() {

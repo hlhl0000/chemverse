@@ -4,8 +4,14 @@
 // 시드 결정적(mulberry32, missions/registry.js에서 임포트) — 전 클라이언트 동일 맵.
 // InstancedMesh·라벨 스프라이트 패턴은 본편 js/world/nature.js를 참고해 신규 작성.
 // ★ THREE는 임포트하지 않고 인자로 전달받는다(main.js 계약).
+//
+// Phase B 개편: 크레이트 시각(열린 나무상자+내용물 실물 메쉬)은 world/items.js의
+// ItemManager가 렌더한다. 이 파일은 배치 데이터(crates 배열)만 생성해 반환한다.
+// 내용물 분배는 game/loot.js(에이전트 B 소유)의 rollCrates()를 그대로 사용 — 중복 구현 금지.
 // ═══════════════════════════════════════════════════════════
 import { mulberry32 } from '../missions/registry.js';
+import { rollCrates } from '../game/loot.js';
+import { makePartMesh } from './items.js';
 
 const HALF_X = 20;    // 맵 절반 폭 (40m)
 const HALF_Z = 14;    // 맵 절반 길이 (28m)
@@ -20,6 +26,9 @@ const TEAM_NAME = { OX: '산화팀', RE: '환원팀' };
 function hexCss(hex) { return `#${(hex >>> 0).toString(16).padStart(6, '0')}`; }
 
 function disposeObject(o) {
+  // items.js가 만든 실물 메쉬(공유 지오메트리/머티리얼 캐시)는 소유권이 items.js에 있으므로
+  // 여기서 dispose하지 않는다(setAssembled로 조립대 위에 부착된 부품 메쉬 보호).
+  if (o.userData?.sharedItem) return;
   if (o.geometry) o.geometry.dispose();
   if (o.material) {
     const mats = Array.isArray(o.material) ? o.material : [o.material];
@@ -109,6 +118,7 @@ export function buildArena(THREE, missionDef, seed) {
   // ── 팀 기지: 발광 조립 패드 + 깃대(OX=-x, RE=+x) ──
   const zonesAssembly = {};
   const baseCenters = { OX: { x: -BASE_X, z: 0 }, RE: { x: BASE_X, z: 0 } };
+  const assembledGroups = {}; // team -> Group (setAssembled이 갱신, dispose 시 별도 처리)
 
   for (const team of ['OX', 'RE']) {
     const c = baseCenters[team];
@@ -151,6 +161,11 @@ export function buildArena(THREE, missionDef, seed) {
     group.add(label);
 
     zonesAssembly[team] = { pos: [c.x, 0, c.z], radius: padRadius };
+
+    const ag = new THREE.Group();
+    ag.position.set(c.x, 0, c.z);
+    group.add(ag);
+    assembledGroups[team] = ag;
   }
 
   // ── 스폰 포인트: 각 팀 기지 앞 5개, 발 기준 y=0 ──
@@ -220,47 +235,50 @@ export function buildArena(THREE, missionDef, seed) {
   coverInst.instanceMatrix.needsUpdate = true;
   group.add(coverInst);
 
-  // ── 공급 상자: missionDef.parts 기반, 중앙 다수 · 외곽 소수 (Phase A는 시각만) ──
-  const parts = missionDef?.parts || [];
-  const arenaCfg = missionDef?.arena || { supplyCenter: 6, supplyEdge: 4 };
-  const supply = [];
-  const crateGeo = new THREE.BoxGeometry(0.6, 0.6, 0.6);
-
-  function spawnCrate(x, z, itemId) {
-    const part = parts.find((p) => p.id === itemId);
-    const color = part?.color ?? 0xffd166;
-    const mat = new THREE.MeshLambertMaterial({ color });
-    const crate = new THREE.Mesh(crateGeo, mat);
-    crate.position.set(x, 0.3, z);
-    group.add(crate);
+  // ── 크레이트 배치 데이터 (시각은 world/items.js의 ItemManager가 렌더) ──
+  // 내용물 분배(부품 6종×2 + 무기 4개 = 16개, 중앙/외곽 지정)는 game/loot.js의
+  // rollCrates()가 결정적으로 계산한다(에이전트 B 소유, 중복 구현 금지).
+  // 여기서는 zone('center'|'edge')에 따라 좌표만 이 파일의 rng로 결정적으로 배정한다.
+  const rolled = rollCrates(missionDef, seed) || [];
+  const crates = [];
+  let edgeIdx = 0;
+  for (const item of rolled) {
+    let x, z;
+    if (item.zone === 'edge') {
+      const sideSign = edgeIdx % 2 === 0 ? 1 : -1;
+      x = sideSign * (9 + rng() * 5.5);
+      z = (rng() - 0.5) * (HALF_Z * 2 - 4);
+      edgeIdx += 1;
+    } else {
+      x = (rng() - 0.5) * 6.5;
+      z = (rng() - 0.5) * 9;
+    }
+    crates.push({ id: item.id, pos: [x, 0, z], kind: item.kind, itemId: item.itemId });
+    // 간단한 충돌 박스(상자 크기 근사) — 시각은 items.js가 그린다
     colliders.push(new THREE.Box3(
       new THREE.Vector3(x - 0.3, 0, z - 0.3),
-      new THREE.Vector3(x + 0.3, 0.6, z + 0.3)
+      new THREE.Vector3(x + 0.3, 0.5, z + 0.3)
     ));
-    if (part) {
-      const label = makeLabelSprite(THREE, part.name, hexCss(color));
-      label.position.set(x, 0.95, z);
-      group.add(label);
-    }
-    supply.push({ pos: [x, 0, z], itemId });
   }
 
-  if (parts.length > 0) {
-    const centerN = arenaCfg.supplyCenter ?? 6;
-    for (let i = 0; i < centerN; i++) {
-      const x = (rng() - 0.5) * 6.5;
-      const z = (rng() - 0.5) * 9;
-      const itemId = parts[Math.floor(rng() * parts.length)].id;
-      spawnCrate(x, z, itemId);
-    }
-    const edgeN = arenaCfg.supplyEdge ?? 4;
-    for (let i = 0; i < edgeN; i++) {
-      const sideSign = i % 2 === 0 ? 1 : -1;
-      const x = sideSign * (9 + rng() * 5.5);
-      const z = (rng() - 0.5) * (HALF_Z * 2 - 4);
-      const itemId = parts[Math.floor(rng() * parts.length)].id;
-      spawnCrate(x, z, itemId);
-    }
+  // 하위 호환: zones.supply는 crates에서 파생
+  const supply = crates.map((c) => ({ pos: c.pos, itemId: c.itemId }));
+
+  // ── 조립대 진행 표시: 장착된 부품 실물 메쉬를 패드 위 원형 배열로 부착 ──
+  function setAssembled(team, itemIds) {
+    const ag = assembledGroups[team];
+    if (!ag) return;
+    while (ag.children.length > 0) ag.remove(ag.children[0]); // 소유권은 items.js 캐시 — 제거만
+    const list = itemIds || [];
+    const n = list.length;
+    const radius = 1.15;
+    list.forEach((itemId, i) => {
+      const m = makePartMesh(THREE, itemId);
+      m.scale.setScalar(0.7);
+      const ang = (i / Math.max(1, n)) * Math.PI * 2;
+      m.position.set(Math.cos(ang) * radius, 0.85, Math.sin(ang) * radius);
+      ag.add(m);
+    });
   }
 
   return {
@@ -269,7 +287,14 @@ export function buildArena(THREE, missionDef, seed) {
     bounds,
     spawns,
     zones: { assembly: zonesAssembly, supply },
+    crates,
+    setAssembled,
     dispose() {
+      // 조립대에 부착된 부품 메쉬(items.js 공유 자원)는 먼저 떼어내 dispose 대상에서 제외
+      for (const team of Object.keys(assembledGroups)) {
+        const ag = assembledGroups[team];
+        while (ag.children.length > 0) ag.remove(ag.children[0]);
+      }
       group.traverse((o) => disposeObject(o));
     },
   };
