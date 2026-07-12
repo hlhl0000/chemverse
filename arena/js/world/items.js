@@ -473,19 +473,28 @@ export class ItemManager {
     this._drops.delete(id);
   }
 
+  // pos 필드 추가(U-3 웨이포인트용) — 기존 호출자는 무시하므로 하위호환
   nearestPickup(pos, r = 2.0) {
     let best = null, bestD = r;
     for (const [id, entry] of this._crateContent) {
       const bp = entry.floating.basePos;
       const d = Math.hypot(pos[0] - bp[0], pos[2] - bp[2]);
-      if (d < bestD) { bestD = d; best = { kind: 'crate', id, itemId: entry.itemId, name: itemName(entry.itemId) }; }
+      if (d < bestD) { bestD = d; best = { kind: 'crate', id, itemId: entry.itemId, name: itemName(entry.itemId), pos: bp }; }
     }
     for (const [id, entry] of this._drops) {
       const bp = entry.floating.basePos;
       const d = Math.hypot(pos[0] - bp[0], pos[2] - bp[2]);
-      if (d < bestD) { bestD = d; best = { kind: 'drop', id, itemId: entry.itemId, name: itemName(entry.itemId) }; }
+      if (d < bestD) { bestD = d; best = { kind: 'drop', id, itemId: entry.itemId, name: itemName(entry.itemId), pos: bp }; }
     }
     return best;
+  }
+
+  // 미니맵용(U-4): 미개봉 크레이트·드랍 좌표 목록
+  listMapPoints() {
+    const out = [];
+    for (const entry of this._crateContent.values()) out.push({ pos: entry.floating.basePos, kind: 'crate' });
+    for (const entry of this._drops.values()) out.push({ pos: entry.floating.basePos, kind: 'drop' });
+    return out;
   }
 
   update(dt) {

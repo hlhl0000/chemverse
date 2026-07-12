@@ -38,6 +38,12 @@ import { Referee } from './game/referee.js';
 import { Combat, WEAPONS } from './game/combat.js';
 import { Lobby } from './ui/lobby.js';
 import { HUD } from './ui/hud.js';
+// Phase U — UX 오버레이 모듈(hud.js와 독립, docs/UX_EXPANSION_PLAN.md)
+import { Reticle } from './ui/reticle.js';
+import { Feedback } from './ui/feedback.js';
+import { Waypoints } from './ui/waypoints.js';
+import { Minimap } from './ui/minimap.js';
+import { Settings } from './ui/settings.js';
 import { getMission, listMissions } from './missions/registry.js';
 // 미션 등록 (side-effect import) — 새 미션은 여기에 한 줄 추가
 import './missions/idealgas.js';
@@ -241,6 +247,33 @@ async function startMatch({ mission, adapter, seed, t0, room, profile, team, ros
   hud.setInventory([]);
   adapter.on('status', (s) => hud.setStatus(s));
 
+  // 5.5) Phase U UX 오버레이 (U-1~U-5) — 전부 독립 모듈, body 직속
+  const teamCss = `#${TEAM_COLOR[team].toString(16).padStart(6, '0')}`;
+  const reticle = new Reticle(document.body);
+  const feedback = new Feedback(document.body);
+  const waypoints = new Waypoints(document.body, engine.camera, THREE);
+  const minimap = new Minimap(document.body); // 기본 20/14 = arena.js HALF_X/Z와 일치
+  minimap.setPads([
+    { x: arena.zones.assembly.OX.pos[0], z: arena.zones.assembly.OX.pos[2], color: '#ff8a3d' },
+    { x: arena.zones.assembly.RE.pos[0], z: arena.zones.assembly.RE.pos[2], color: '#00b4d8' },
+  ]);
+  minimap.setVisible(true);
+  const settings = new Settings(document.body, { onSens: (k) => controls.setLookSensScale(k) });
+  settings.setVisible(true);
+
+  // 공격자 월드 좌표 → 화면각(0=정면/상단, 시계+, 라디안). null이면 방향 미상(U-2)
+  function screenAngleTo(p) {
+    if (!p) return null;
+    const me = controls.object.position;
+    const world = Math.atan2(p[0] - me.x, p[2] - me.z);
+    const ry = controls.getNetState().ry;
+    const fwd = Math.atan2(-Math.sin(ry), -Math.cos(ry));
+    let a = fwd - world;
+    while (a > Math.PI) a -= Math.PI * 2;
+    while (a < -Math.PI) a += Math.PI * 2;
+    return a;
+  }
+
   let usingPicked = true;   // 획득 무기 ↔ 기본 스포이트 토글
   function currentWeaponId() {
     const picked = gc.myWeapon();
@@ -271,7 +304,7 @@ async function startMatch({ mission, adapter, seed, t0, room, profile, team, ros
     if (myDead || matchEnded) return;
     const ray = controls.getAimRay();
     const shot = combat.fire(ray.origin, ray.dir);
-    if (shot) { adapter.send('shot', shot); refreshWeaponHud(); }
+    if (shot) { adapter.send('shot', shot); refreshWeaponHud(); reticle.pulseFire(); }
   });
   hud.onSwitchWeapon(() => {
     if (gc.myWeapon() === 'spoit') return; // 획득 무기 없으면 무의미
@@ -318,11 +351,16 @@ async function startMatch({ mission, adapter, seed, t0, room, profile, team, ros
       hud.toast('❌ 오답! -20점 · 30초 후 재도전', 3000);
     }
   });
-  gc.on('hp', (e) => { if (e.pid === myId) hud.setGauge(e.gauge); });
+  gc.on('hp', (e) => {
+    if (e.pid !== myId) return;
+    hud.setGauge(e.gauge);
+    feedback.setGauge(e.gauge); // U-2 저체력 비네트
+  });
   gc.on('kill', (e) => {
     const a = nameById.get(e.shooter) || '?';
     const v = nameById.get(e.victim) || '?';
     hud.killfeed(`${a} ⚗→ ${v} · 연구윤리 위반 -5`);
+    if (e.shooter === myId) reticle.hitmark(); // U-1 명중 확정
     if (e.drop && !knownDrops.has(e.drop.id)) {
       items.addDrop(e.drop.id, e.drop.itemId, e.drop.pos);
       knownDrops.add(e.drop.id);
@@ -338,6 +376,7 @@ async function startMatch({ mission, adapter, seed, t0, room, profile, team, ros
     myDead = false;
     hud.showRespawn(null);
     hud.setGauge(100);
+    feedback.setGauge(100); // U-2 비네트 해제
     controls.teleport(sp.pos, sp.ry);
     effects.respawnRing(sp.pos, TEAM_COLOR[team]);
   });
@@ -346,6 +385,10 @@ async function startMatch({ mission, adapter, seed, t0, room, profile, team, ros
     if (matchEnded) return;
     matchEnded = true;
     controls.setFirstPerson(false); // 매치 종료 → 3인칭 복귀(결과 화면 배경)
+    reticle.setVisible(false);      // Phase U 오버레이 정리
+    waypoints.clearAll();
+    minimap.setVisible(false);
+    settings.setVisible(false);
     if (referee) referee.stop();
     hud.closeQuiz();
     hud.showRespawn(null);
@@ -371,7 +414,7 @@ async function startMatch({ mission, adapter, seed, t0, room, profile, team, ros
 
   // 8) 루프
   const endAtLocal = t0 + refereeCfg.timeLimitSec * 1000;
-  let pickupAcc = 0, depositAcc = 0, weapHudAcc = 0;
+  let pickupAcc = 0, depositAcc = 0, weapHudAcc = 0, uxAcc = 0;
   const asmZone = arena.zones.assembly[team];
 
   engine.onUpdate((dt) => {
@@ -381,6 +424,7 @@ async function startMatch({ mission, adapter, seed, t0, room, profile, team, ros
     const fpAmt = controls.fpAmount();
     chr.group.visible = fpAmt < 0.6;
     vmSlot.visible = fpAmt >= 0.6 && !myDead && !matchEnded;
+    reticle.setVisible(fpAmt >= 0.6 && !myDead && !matchEnded); // U-1
     rp.update(dt);
     items.update(dt);
     hud.update(dt);
@@ -394,9 +438,40 @@ async function startMatch({ mission, adapter, seed, t0, room, profile, team, ros
       else effects.splash(im.pos);
     }
     if (!myDead && !matchEnded) {
-      for (const h of res.myHits) gc.reportHit(h.sid, h.shooter, h.w, h.pos);
+      for (const h of res.myHits) {
+        gc.reportHit(h.sid, h.shooter, h.w, h.pos);
+        // U-2 피격 방향 인디케이터(공격자 위치를 알면 방향, 모르면 전면 플래시)
+        feedback.damageFrom(screenAngleTo(rp.getPosition(h.shooter)), h.w === 'flask' ? 1 : 0.6);
+      }
     }
     effects.update(dt);
+    feedback.update(dt);                        // U-2 원호 페이드
+    waypoints.update(controls.object.position); // U-3 마커 투영
+
+    // U-3 목표 규칙 + U-4 미니맵 — 4Hz
+    uxAcc += dt;
+    if (uxAcc >= 0.25) {
+      uxAcc = 0;
+      const myPos = controls.object.position;
+      if (!matchEnded) {
+        const invCount = gc.myInv().length;
+        const target = invCount === 0 ? items.nearestPickup([myPos.x, myPos.y, myPos.z], 999) : null;
+        if (target && target.pos) {
+          waypoints.set('pickup', { pos: target.pos, icon: '🧪', color: '#ffd166', label: target.name });
+        } else {
+          waypoints.clear('pickup');
+        }
+        waypoints.set('asm', {
+          pos: asmZone.pos, icon: '⚗', color: teamCss,
+          label: invCount > 0 ? '조립대로!' : '우리 조립대', pulse: invCount > 0,
+        });
+        minimap.update({
+          me: { x: myPos.x, z: myPos.z, yaw: controls.getNetState().ry, color: teamCss },
+          mates: rp.listForMap().filter((m) => m.team === team).map((m) => ({ x: m.pos[0], z: m.pos[2] })),
+          points: items.listMapPoints(),
+        });
+      }
+    }
 
     // 자동 픽업(0.25s) · 자동 장착(0.5s)
     if (!myDead && !matchEnded) {

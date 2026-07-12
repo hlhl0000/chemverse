@@ -78,6 +78,7 @@ export class TPSControls {
     // 1인칭 모드(전투 뷰): setFirstPerson()으로 전환, _fpBlend 0(3인칭)~1(1인칭)
     this._fp = false;
     this._fpBlend = 0;
+    this._sensScale = 1; // 시선 감도 배율(U-5 설정 패널이 setLookSensScale로 조정)
 
     this.joystick = joystickZone ? new Joystick(joystickZone) : null;
 
@@ -158,8 +159,9 @@ export class TPSControls {
 
   // 입력은 target에만 누적 — 실제 회전은 update()에서 지수 보간(태블릿 지터 흡수)
   _applyLook(dx, dy, sens) {
-    this._yawTarget -= dx * sens;
-    this._pitchTarget -= dy * sens;
+    const s = sens * this._sensScale;
+    this._yawTarget -= dx * s;
+    this._pitchTarget -= dy * s;
     const [pmin, pmax] = this._pitchRange();
     this._pitchTarget = THREE.MathUtils.clamp(this._pitchTarget, pmin, pmax);
   }
@@ -177,6 +179,9 @@ export class TPSControls {
 
   isFirstPerson() { return this._fp; }
   fpAmount() { return this._fpBlend; } // 0=완전 3인칭, 1=완전 1인칭 (캐릭터 숨김 판단용)
+
+  // 시선 감도 배율(U-5): 0.3~3 클램프. 설정 패널(ui/settings.js)이 호출.
+  setLookSensScale(k) { this._sensScale = Math.min(3, Math.max(0.3, k || 1)); }
 
   setColliders(list) { this.colliders = list || []; }
   setBounds(b) { this.bounds = b || null; }

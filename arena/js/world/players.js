@@ -133,5 +133,23 @@ export class RemotePlayers {
     for (const entry of this._entries.values()) entry.update(dt);
   }
 
+  // 원격 플레이어 현재 위치 → [x,y,z] | null — 피격 방향 인디케이터용(U-2)
+  getPosition(id) {
+    const e = this._entries.get(id);
+    if (!e) return null;
+    const p = e.avatar.group.position;
+    return [p.x, p.y, p.z];
+  }
+
+  // 미니맵용(U-4): [{id, team, pos:[x,y,z]}] — 아군 필터는 호출자(main.js) 책임
+  listForMap() {
+    const out = [];
+    for (const [id, e] of this._entries) {
+      const p = e.avatar.group.position;
+      out.push({ id, team: e.profile?.team === 'RE' ? 'RE' : 'OX', pos: [p.x, p.y, p.z] });
+    }
+    return out;
+  }
+
   get count() { return this._entries.size; }
 }
